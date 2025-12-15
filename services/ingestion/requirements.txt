@@ -1,0 +1,7 @@
+psycopg2-binary==2.9.9
+redis==5.0.1
+python-dotenv==1.0.0
+watchdog==3.0.0
+asyncio==3.4.3
+aiofiles==23.2.1
+xxhash==3.4.1
