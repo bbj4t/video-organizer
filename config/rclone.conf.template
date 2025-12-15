@@ -1,0 +1,47 @@
+# Hetzner Storage Box (SFTP)
+[hetzner]
+type = sftp
+host = ${HETZNER_STORAGE_HOST}
+user = ${HETZNER_STORAGE_USER}
+pass = ${HETZNER_STORAGE_PASSWORD}
+shell_type = unix
+md5sum_command = md5sum
+sha1sum_command = sha1sum
+
+# Google Drive
+[gdrive]
+type = drive
+scope = drive
+# Run: rclone config to get token
+token = {"access_token":"YOUR_TOKEN","token_type":"Bearer","refresh_token":"YOUR_REFRESH_TOKEN","expiry":"DATE"}
+team_drive = 
+root_folder_id = 
+
+# Microsoft OneDrive
+[onedrive]
+type = onedrive
+# Run: rclone config to get token
+token = {"access_token":"YOUR_TOKEN","token_type":"bearer","refresh_token":"YOUR_REFRESH_TOKEN","expiry":"DATE"}
+drive_id = 
+drive_type = personal
+
+# Local source (for testing or direct access)
+[local]
+type = local
+nounc = true
+
+# Combined remote that unions all sources
+[allsources]
+type = union
+upstreams = gdrive:Videos onedrive:Videos local:/mnt/local
+action_policy = epff
+create_policy = epff
+search_policy = ff
+
+# Cache for better performance
+[cached]
+type = cache
+remote = hetzner:${HETZNER_STORAGE_PATH}
+chunk_size = 10M
+info_age = 2d
+chunk_total_size = 10G
