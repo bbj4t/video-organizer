@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for job tracking and metadata
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  # Redis for job queue
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # Rclone mount service for cloud sources
+  rclone-mount:
+    build:
+      context: ./services/rclone
+      dockerfile: Dockerfile
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    environment:
+      - RCLONE_CONFIG=${RCLONE_CONFIG_PATH}
+    volumes:
+      - ${RCLONE_CONFIG_PATH}:/config/rclone.conf:ro
+      - rclone_cache:/cache
+      - cloud_mounts:/mnt/cloud:shared
+    restart: unless-stopped
+
+  # Ingestion service - syncs from all sources
+  ingestion:
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - cloud_mounts:/mnt/cloud:ro
+      - ./local_media:/mnt/local:ro
+      - raw_videos:/data/raw
+      - ./config:/config:ro
+    depends_on:
+      - postgres
+      - redis
+      - rclone-mount
+    restart: unless-stopped
+
+  # Analyzer service - coordinates GPU analysis via RunPod
+  analyzer:
+    build:
+      context: ./services/analyzer
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - raw_videos:/data/raw:ro
+      - analyzed_videos:/data/analyzed
+      - ./config:/config:ro
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  # Organizer service - renames and structures for Jellyfin
+  organizer:
+    build:
+      context: ./services/organizer
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - analyzed_videos:/data/analyzed:ro
+      - organized_videos:/data/organized
+      - ./config:/config:ro
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  # API service - web dashboard and control
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  # Worker - processes jobs from queue
+  worker:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - raw_videos:/data/raw
+      - analyzed_videos:/data/analyzed
+      - organized_videos:/data/organized
+    depends_on:
+      - postgres
+      - redis
+      - analyzer
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+volumes:
+  postgres_data:
+  redis_data:
+  rclone_cache:
+  cloud_mounts:
+  raw_videos:
+  analyzed_videos:
+  organized_videos:
+
+networks:
+  default:
+    name: video-organizer
