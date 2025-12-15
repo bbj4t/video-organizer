@@ -1,0 +1,8 @@
+runpod==1.6.2
+torch==2.1.0
+transformers==4.36.2
+accelerate==0.25.0
+bitsandbytes==0.41.3
+pillow==10.2.0
+soundfile==0.12.1
+librosa==0.10.1
